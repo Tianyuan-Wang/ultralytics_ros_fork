@@ -17,6 +17,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import os
+import torch
 import cv_bridge
 import numpy as np
 import roslib.packages
@@ -30,6 +32,18 @@ from ultralytics_ros.msg import YoloResult
 class TrackerNode:
     def __init__(self):
         yolo_model = rospy.get_param("~yolo_model", "yolov8n.pt")
+
+        # Get the number of CPU threads from a ROS param (default to None)
+        # If not None, set PyTorch to use that many threads
+        num_threads = rospy.get_param("~num_threads", None)
+        if num_threads is not None:
+            rospy.loginfo(f"Setting torch.set_num_threads({num_threads})")
+            torch.set_num_threads(num_threads)
+            torch.set_num_interop_threads(num_threads)
+            # Alternatively, you could also set environment variables:
+            # os.environ["OMP_NUM_THREADS"] = str(num_threads)
+            # os.environ["MKL_NUM_THREADS"] = str(num_threads)
+
         self.input_topic = rospy.get_param("~input_topic", "image_raw")
         self.result_topic = rospy.get_param("~result_topic", "yolo_result")
         self.result_image_topic = rospy.get_param("~result_image_topic", "yolo_image")

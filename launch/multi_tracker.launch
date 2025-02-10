@@ -1,0 +1,72 @@
+<launch>
+    <!-- 默认不可视化 -->
+    <arg name="debug" default="false"/>
+
+    <!-- 模型与推理相关参数 -->
+    <arg name="yolo_model" default="yolov8m-seg.pt"/>
+    <arg name="conf_thres" default="0.25"/>
+    <arg name="iou_thres" default="0.45"/>
+    <arg name="max_det" default="300"/>
+    <arg name="classes" default=""/>
+    <arg name="tracker" default="bytetrack.yaml"/>
+    <arg name="device" default=""/>
+
+    <!-- 可视化参数开关与样式 -->
+    <arg name="result_conf" default="true"/>
+    <arg name="result_line_width" default="1"/>
+    <arg name="result_font_size" default="1"/>
+    <arg name="result_font" default="Arial.ttf"/>
+    <arg name="result_labels" default="true"/>
+    <arg name="result_boxes" default="true"/>
+
+    <!-- 左右相机的话题名-->
+    <arg name="left_input_topic"  default="/left/image_raw"/>
+    <arg name="right_input_topic" default="/right/image_raw"/>
+
+    <!-- 发布的结果话题名 -->
+    <arg name="left_result_topic"         default="/left/yolo_result"/>
+    <arg name="left_result_image_topic"   default="/left/yolo_image"/>
+    <arg name="right_result_topic"        default="/right/yolo_result"/>
+    <arg name="right_result_image_topic"  default="/right/yolo_image"/>
+
+    <!-- 启动一个多路跟踪节点 -->
+    <node name="multi_tracker_node" pkg="ultralytics_ros" type="multi_tracker_node.py" output="screen">
+
+        <!-- 模型与推理参数 -->
+        <param name="yolo_model"          value="$(arg yolo_model)"/>
+        <param name="conf_thres"          value="$(arg conf_thres)"/>
+        <param name="iou_thres"           value="$(arg iou_thres)"/>
+        <param name="max_det"             value="$(arg max_det)"/>
+        <param name="tracker"             value="$(arg tracker)"/>
+        <rosparam param="classes" subst_value="true">$(arg classes)</rosparam>
+        <rosparam param="device"  subst_value="true">$(arg device)</rosparam>
+
+        <!-- 订阅的左右图像话题 -->
+        <param name="left_input_topic"  value="$(arg left_input_topic)"/>
+        <param name="right_input_topic" value="$(arg right_input_topic)"/>
+
+        <!-- 发布的左右检测结果话题 -->
+        <param name="left_result_topic"         value="$(arg left_result_topic)"/>
+        <param name="left_result_image_topic"   value="$(arg left_result_image_topic)"/>
+        <param name="right_result_topic"        value="$(arg right_result_topic)"/>
+        <param name="right_result_image_topic"  value="$(arg right_result_image_topic)"/>
+
+        <!-- 可视化绘制相关参数 -->
+        <param name="result_conf"         value="$(arg result_conf)"/>
+        <param name="result_line_width"   value="$(arg result_line_width)"/>
+        <param name="result_font_size"    value="$(arg result_font_size)"/>
+        <param name="result_font"         value="$(arg result_font)"/>
+        <param name="result_labels"       value="$(arg result_labels)"/>
+        <param name="result_boxes"        value="$(arg result_boxes)"/>
+    </node>
+
+    <!-- 查看左右可视化结果 -->
+    <node if="$(arg debug)" name="image_view_left" pkg="image_view" type="image_view" output="screen">
+        <remap from="image" to="$(arg left_result_image_topic)"/>
+    </node>
+
+    <node if="$(arg debug)" name="image_view_right" pkg="image_view" type="image_view" output="screen">
+        <remap from="image" to="$(arg right_result_image_topic)"/>
+    </node>
+
+</launch>
