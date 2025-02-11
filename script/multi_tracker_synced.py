@@ -10,7 +10,7 @@ from ultralytics import YOLO
 from vision_msgs.msg import Detection2D, Detection2DArray, ObjectHypothesisWithPose
 from ultralytics_ros.msg import YoloResult
 
-class MultiTrackerNode:
+class MultiTrackerSynced:
     def __init__(self):
         """
 
@@ -64,7 +64,7 @@ class MultiTrackerNode:
         self.right_result_pub = rospy.Publisher(self.right_result_topic,        YoloResult, queue_size=1)
         self.right_image_pub  = rospy.Publisher(self.right_result_image_topic,  Image,      queue_size=1)
 
-        rospy.loginfo("MultiTrackerNode with time sync init done.")
+        rospy.loginfo("MultiTrackerSynced init done.")
 
     def synced_image_callback(self, left_msg, right_msg):
         """
@@ -154,7 +154,7 @@ class MultiTrackerNode:
 
 def main():
     rospy.init_node("multi_tracker_node")
-    node = MultiTrackerNode()
+    node = MultiTrackerSynced()
     rospy.spin()
 
 if __name__ == "__main__":

@@ -76,7 +76,7 @@ class MultiTrackerNode:
             device=self.device,
             verbose=False,
         )
-        self.publish_result(msg.header, results, self.left_result_pub, self.left_result_image_pub)
+        self.publish_result(msg.header, results, self.left_result_pub, self.left_image_pub)
 
     def right_image_callback(self, msg):
         """
@@ -95,7 +95,7 @@ class MultiTrackerNode:
             device=self.device,
             verbose=False,
         )
-        self.publish_result(msg.header, results, self.right_result_pub, self.right_result_image_pub)
+        self.publish_result(msg.header, results, self.right_result_pub, self.right_image_pub)
 
     def publish_result(self, header, results, pub_result, pub_image):
         """
