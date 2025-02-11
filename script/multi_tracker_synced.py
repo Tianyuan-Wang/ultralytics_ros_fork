@@ -9,6 +9,7 @@ from sensor_msgs.msg import Image
 from ultralytics import YOLO
 from vision_msgs.msg import Detection2D, Detection2DArray, ObjectHypothesisWithPose
 from ultralytics_ros.msg import YoloResult
+from ultralytics_ros.msg import Keypoint2D
 
 class MultiTrackerSynced:
     def __init__(self):
@@ -117,7 +118,8 @@ class MultiTrackerSynced:
         if results is not None and len(results) > 0:
             yolo_result_msg = YoloResult()
             yolo_result_msg.header = header
-            # Detection
+
+            ''' 1. Bounding boxes，fill in the "vision_msgs/Detection2DArra" section in the msg '''
             detections = Detection2DArray()
             bounding_box = results[0].boxes.xywh
             classes = results[0].boxes.cls
@@ -137,7 +139,28 @@ class MultiTrackerSynced:
 
             yolo_result_msg.detections = detections
 
-            ''' Draw an overlay for visualisation '''
+            ''' 2. Keypoints, fill in the keypoints section in the msg '''
+            keypoints_instance = results[0].keypoints
+            # A tensor of N*K*3 (N * person, K * keypoint, [x, y, conf]) K is 17 by default
+            # It is possibly None if not using pose model
+
+            if keypoints_instance is not None and keypoints_instance.shape[1]>0:
+                kpts = []
+                # Only read the 1st person as the scenario only deal with one
+                if keypoints_instance.xy is not None and keypoints_instance.conf is not None:
+                    xy = keypoints_instance.xy[0]
+                    conf = keypoints_instance.conf[0]
+                    for (xv, yv), cv in zip(xy, conf):  # Append each point to the list, 17 expected in total
+                        kpt_msg = Keypoint2D()
+                        kpt_msg.x = float(xv)
+                        kpt_msg.y = float(yv)
+                        kpt_msg.confidence = float(cv)
+                        kpts.append(kpt_msg)
+                    yolo_result_msg.keypoints = kpts
+                else:
+                    rospy.logwarn("Keypoints instance is not None but 'xy' or 'conf' is None.")
+
+            ''' 3. Draw an overlay for visualisation '''
             plotted_image = results[0].plot(
                 conf=self.result_conf,
                 line_width=self.result_line_width,

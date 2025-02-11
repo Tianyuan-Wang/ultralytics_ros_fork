@@ -31,6 +31,7 @@ find_package(PCL REQUIRED)
 add_message_files(
   FILES
   YoloResult.msg
+  Keypoint2D.msg
 )
 
 generate_messages(
