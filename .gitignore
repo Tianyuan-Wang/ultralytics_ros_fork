@@ -2,3 +2,4 @@
 !/models/.gitkeep
 .vscode
 compile_commands.json
+.idea/

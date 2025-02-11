@@ -4,6 +4,7 @@
 import rospy
 import cv_bridge
 import numpy as np
+import message_filters
 from sensor_msgs.msg import Image
 from ultralytics import YOLO
 from vision_msgs.msg import Detection2D, Detection2DArray, ObjectHypothesisWithPose
@@ -46,10 +47,16 @@ class MultiTrackerNode:
         self.model = YOLO(self.yolo_model)
         self.model.fuse()
 
-        ''' Subscribe to input image topics '''
-        self.bridge    = cv_bridge.CvBridge()
-        self.left_sub  = rospy.Subscriber(self.left_input_topic,  Image, self.left_image_callback,  queue_size=1, buff_size=2**24)
-        self.right_sub = rospy.Subscriber(self.right_input_topic, Image, self.right_image_callback, queue_size=1, buff_size=2**24)
+        ''' Subscribe to input image topics and set up synchroniser'''
+        self.bridge = cv_bridge.CvBridge()
+        left_sub    = message_filters.Subscriber(self.left_input_topic,  Image)
+        right_sub   = message_filters.Subscriber(self.right_input_topic, Image)
+        # Create an approximate synchroniser
+        sync = message_filters.ApproximateTimeSynchronizer([left_sub, right_sub],
+                                                           queue_size=10,
+                                                           slop=0.1,
+                                                           allow_headerless=True)
+        sync.registerCallback(self.synced_image_callback)
 
         ''' Publish results '''
         self.left_result_pub  = rospy.Publisher(self.left_result_topic,         YoloResult, queue_size=1)
@@ -57,17 +64,20 @@ class MultiTrackerNode:
         self.right_result_pub = rospy.Publisher(self.right_result_topic,        YoloResult, queue_size=1)
         self.right_image_pub  = rospy.Publisher(self.right_result_image_topic,  Image,      queue_size=1)
 
-        rospy.loginfo("MultiTrackerNode init done.")
+        rospy.loginfo("MultiTrackerNode with time sync init done.")
 
-    def left_image_callback(self, msg):
+    def synced_image_callback(self, left_msg, right_msg):
         """
-        Callback function to process left channel image
-        :param msg:
-        :return:
+        Callback function to receive both left and right images and process them.
+        left_msg.header.stamp and right_msg.header.stamp need to be within the threshold.
         """
-        cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
-        results = self.model.track(
-            source=cv_image,
+        ''' Convert to cv2 image format for later processing '''
+        left_cv_image  = self.bridge.imgmsg_to_cv2(left_msg,  desired_encoding="bgr8")
+        right_cv_image = self.bridge.imgmsg_to_cv2(right_msg, desired_encoding="bgr8")
+
+        ''' YOLO processing on left and right images '''
+        left_results  = self.model.track(
+            source=left_cv_image,
             conf=self.conf_thres,
             iou=self.iou_thres,
             max_det=self.max_det,
@@ -76,17 +86,9 @@ class MultiTrackerNode:
             device=self.device,
             verbose=False,
         )
-        self.publish_result(msg.header, results, self.left_result_pub, self.left_result_image_pub)
 
-    def right_image_callback(self, msg):
-        """
-        Callback function to process right channel image
-        :param msg:
-        :return:
-        """
-        cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
-        results = self.model.track(
-            source=cv_image,
+        right_results = self.model.track(
+            source=right_cv_image,
             conf=self.conf_thres,
             iou=self.iou_thres,
             max_det=self.max_det,
@@ -95,7 +97,13 @@ class MultiTrackerNode:
             device=self.device,
             verbose=False,
         )
-        self.publish_result(msg.header, results, self.right_result_pub, self.right_result_image_pub)
+
+        ''' Publish left and right results '''
+        # 注意：如果要分开管理左右跟踪器，需要在 YOLO v8 中指定 tracker 重置策略
+        # 这里简单地分别把图像扔给同一个 model.track()，内部会维护一个Tracker实例
+        # 可能要在 model.track() 中加上 "persist=True" 之类，保证跟踪状态独立
+        self.publish_result(left_msg.header,  left_results,  self.left_result_pub,  self.left_image_pub)
+        self.publish_result(right_msg.header, right_results, self.right_result_pub, self.right_image_pub)
 
     def publish_result(self, header, results, pub_result, pub_image):
         """
@@ -130,7 +138,14 @@ class MultiTrackerNode:
             yolo_result_msg.detections = detections
 
             ''' Draw an overlay for visualisation '''
-            plotted_image = results[0].plot()
+            plotted_image = results[0].plot(
+                conf=self.result_conf,
+                line_width=self.result_line_width,
+                font_size=self.result_font_size,
+                font=self.result_font,
+                labels=self.result_labels,
+                boxes=self.result_boxes,
+            )
             result_image_msg = self.bridge.cv2_to_imgmsg(plotted_image, encoding="bgr8")
 
             ''' Publish them '''
